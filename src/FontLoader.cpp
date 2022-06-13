@@ -57,7 +57,12 @@ void FontLoader::loadFont(const std::string& fontFamily, const std::string& font
     nlohmann::json data = {{"path", path}};
     auto key = FontLoader::genKey(fontFamily, fontWeight);
 
-    callJSFunc("loadFont", data.dump().c_str(), [this, key, cb](int err, uintptr_t ptr, size_t size) {
+    auto it1 = fontMap.find(key);
+    if (it1 != fontMap.end()) {
+        return cb(0);
+    }
+
+    std::function<void(int, uintptr_t, size_t)> callback = [this, key, cb](int err, uintptr_t ptr, size_t size) {
         if (err) {
             std::cout << "loadFont error!" << std::endl;
             return cb(err);
@@ -73,7 +78,18 @@ void FontLoader::loadFont(const std::string& fontFamily, const std::string& font
         std::cout << key << " loaded!" << std::endl;
 
         cb(err);
-    });
+
+        this->fontLoadingMap.erase(key);
+    };
+
+    auto it2 = fontLoadingMap.find(key);
+    if (it2 != fontLoadingMap.end()) {
+        int seq = it2->second;
+        appendCallback(seq, callback);
+    } else {
+        int seq = callJSFunc("loadFont", data.dump().c_str(), callback);
+        fontLoadingMap[key] = seq;
+    }
 }
 
 FontInfo* FontLoader::getFontInfo(const std::string& fontFamily) {

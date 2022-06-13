@@ -3,10 +3,15 @@
 #include "FontLoader.h"
 #include "libicu.h"
 #include "libskia.h"
+#include <cmath>
 #include <functional>
 #include <set>
 #include <unordered_map>
 #include <vector>
+
+
+#define DEFAULT_FONT_FAMILY "PingFang SC"
+#define DEFAULT_FONT_WEIGHT "Regular"
 
 
 class TextFallback : public Singleton<TextFallback> {
@@ -17,7 +22,7 @@ public:
     std::set<std::string> unavailableFamilies;
 
 private:
-    void _getCharFallbackFont(const int idx, std::vector<std::string>& families, UChar32 ch32, FontMeta& fontMeta,
+    void _getCharFallbackFont(const int idx, std::vector<std::string> families, UChar32 ch32, FontMeta fontMeta,
                               std::function<void(std::shared_ptr<const SkFont>)> cb);
 
 public:

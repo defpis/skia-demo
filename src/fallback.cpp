@@ -1,10 +1,10 @@
 #include "fallback.h"
 
 std::unordered_map<UScriptCode, std::vector<std::string>> TextFallback::families = {
-    {UScriptCode::USCRIPT_INVALID_CODE, {}},
-    {UScriptCode::USCRIPT_COMMON, {}},
-    {UScriptCode::USCRIPT_LATIN, {}},
-    {UScriptCode::USCRIPT_HAN, {}},
+    {UScriptCode::USCRIPT_INVALID_CODE, {"Noto Sans SC"}},
+    {UScriptCode::USCRIPT_COMMON, {"Noto Sans SC"}},
+    {UScriptCode::USCRIPT_LATIN, {"Are You Serious"}},
+    {UScriptCode::USCRIPT_HAN, {"Noto Serif SC"}},
 };
 
 std::vector<std::string>& TextFallback::getFallbackFamilies(UChar32 ch32) {
@@ -13,6 +13,8 @@ std::vector<std::string>& TextFallback::getFallbackFamilies(UChar32 ch32) {
     if (U_FAILURE(err)) {
         std::cout << "uscript_getScript failed: " << err << std::endl;
     }
+
+    // std::cout << ch32 << " | " << code << std::endl;
 
     auto it = TextFallback::families.find(code);
     if (it == TextFallback::families.end()) {
@@ -23,7 +25,42 @@ std::vector<std::string>& TextFallback::getFallbackFamilies(UChar32 ch32) {
 }
 
 FontMeta& matchMostRelatedFontMeta(FontInfo& fontInfo, FontMeta& fontMeta) {
-    return fontMeta;
+    auto it = fontInfo.find(fontMeta.style);
+    if (it != fontInfo.end()) {
+        return it->second;
+    }
+
+    bool filterByItalic = false;
+    for (auto it = fontInfo.begin(); it != fontInfo.end(); it++) {
+        if (it->second.italic == fontMeta.italic) {
+            filterByItalic = true;
+            break;
+        }
+    }
+
+    FontMeta* matched = &(fontInfo.begin()->second);
+    int min = std::numeric_limits<int>::max();
+
+    for (auto it = fontInfo.begin(); it != fontInfo.end(); it++) {
+        if (filterByItalic && it->second.italic != fontMeta.italic) {
+            continue;
+        }
+
+        int diff = std::abs(it->second.weight - fontMeta.weight);
+
+        if (diff == 0) {
+            matched = &(it->second);
+            break;
+        } else if (diff < min) {
+            matched = &(it->second);
+            min = diff;
+        } else if (diff == min && fontMeta.weight <= 400 ? it->second.weight < matched->weight
+                                                         : it->second.weight > matched->weight) {
+            matched = &(it->second);
+        }
+    }
+
+    return *matched;
 }
 
 bool TextFallback::checkCharIfNeedFallback(UChar32 ch32, std::string family, std::string weight) {
@@ -139,8 +176,8 @@ std::shared_ptr<const SkFont> TextFallback::getCharFallbackFontFromCache(UChar32
     return nullptr;
 }
 
-void TextFallback::_getCharFallbackFont(const int idx, std::vector<std::string>& families, UChar32 ch32,
-                                        FontMeta& fontMeta, std::function<void(std::shared_ptr<const SkFont>)> cb) {
+void TextFallback::_getCharFallbackFont(const int idx, std::vector<std::string> families, UChar32 ch32,
+                                        FontMeta fontMeta, std::function<void(std::shared_ptr<const SkFont>)> cb) {
 
     // 超出范围没找到
     if (idx >= families.size()) {
@@ -169,7 +206,7 @@ void TextFallback::_getCharFallbackFont(const int idx, std::vector<std::string>&
 
     // 无法回退或没有字体信息
     auto it = unavailableFamilies.find(family);
-    if (it == unavailableFamilies.end() || fontInfoPtr == nullptr) {
+    if (it != unavailableFamilies.end() || fontInfoPtr == nullptr) {
         return _getCharFallbackFont(idx + 1, families, ch32, fontMeta, cb);
     }
 
@@ -180,26 +217,27 @@ void TextFallback::_getCharFallbackFont(const int idx, std::vector<std::string>&
 
     if (font == nullptr) {
         fontLoader.loadFont(fbFontMeta.family, fbFontMeta.style,
-                            [this, &fbFontMeta, &fontLoader, idx, &families, ch32, &fontMeta, &cb](int err) {
+                            [this, fbFontMeta, &fontLoader, idx, families, ch32, fontMeta, cb](int err) {
                                 if (err == 0) {
                                     // 异步加载完成，可以同步获取
                                     std::shared_ptr<SkFont> font =
                                         fontLoader.getFont(fbFontMeta.family, fbFontMeta.style);
 
                                     SkGlyphID id = font->unicharToGlyph(ch32);
-                                    if (idx != 0) {
+                                    if (id != 0) {
                                         return cb(font);
                                     }
+                                } else {
+                                    std::cout << "Can't Load font " << fbFontMeta.family << "-" << fbFontMeta.style
+                                              << "!" << std::endl;
+                                    this->unavailableFamilies.insert(fbFontMeta.family);
                                 }
 
-                                std::cout << "Can't Load font " << fbFontMeta.family << "-" << fbFontMeta.style << "!"
-                                          << std::endl;
-                                this->unavailableFamilies.insert(fbFontMeta.family);
                                 return this->_getCharFallbackFont(idx + 1, families, ch32, fontMeta, cb);
                             });
     } else {
         SkGlyphID id = font->unicharToGlyph(ch32);
-        if (idx != 0) {
+        if (id != 0) {
             return cb(font);
         }
 

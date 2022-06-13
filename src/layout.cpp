@@ -129,17 +129,22 @@ bool isVisible(std::string& text) {
 
 void setFontAndGlyphId(CharToken& charToken) {
     auto& charConfig = charToken.charConfig;
-    charToken.fallbackType = FallbackType::NoNeedFallback; // TODO: 暂时都不回退
+
     FontLoader& fontLoader = FontLoader::getInstance();
-    auto key = FontLoader::genKey("PingFang SC", "Regular");
-    charToken.font = fontLoader.fontMap[key];
+    TextFallback& textFallback = TextFallback::getInstance();
+
     auto uText = icu::UnicodeString(charToken.text.c_str());
     SkUnichar unichar = uText.char32At(0);
-    charToken.glyphId = charToken.font->unicharToGlyph(unichar);
-    std::cout << charToken.text << " "
-              << TextFallback::getInstance().checkCharIfNeedFallback(unichar, charConfig->fontFamily,
-                                                                     charConfig->fontWeight)
-              << std::endl;
+
+    auto font = textFallback.getCharFallbackFontFromCache(unichar, charConfig->fontFamily, charConfig->fontWeight);
+
+    if (font == nullptr) {
+        auto key = FontLoader::genKey(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
+        font = fontLoader.fontMap[key];
+    }
+
+    charToken.font = font;
+    charToken.glyphId = font->unicharToGlyph(unichar);
 }
 
 void tokenize(std::string& text, std::vector<int>& charConfigIndexs,
@@ -336,7 +341,6 @@ float getTopOffset(float height, float textHeight, VerticalAlignType verticalAli
 }
 
 void layout() {
-    // default text config
     TextConfig textConfig;
     textConfig.text = "Hello World!\n你好，世界！";
     textConfig.charConfigIndexs = {
@@ -432,6 +436,27 @@ void layout() {
         }
         top += overallConfig.paragraphSpacing;
     }
+
+    TextFallback& textFallback = TextFallback::getInstance();
+    // std::vector<std::shared_ptr<CharToken>> fallbackTokens;
+
+    for (auto& charToken : visibleTokens) {
+        auto uText = icu::UnicodeString(charToken->text.c_str());
+        SkUnichar unichar = uText.char32At(0);
+
+        auto& charConfig = charToken->charConfig;
+
+        bool needFallback =
+            textFallback.checkCharIfNeedFallback(unichar, charConfig->fontFamily, charConfig->fontWeight);
+
+        // fallbackTokens.push_back(charToken);
+        if (needFallback) {
+            textFallback.getCharFallbackFont(
+                unichar, charConfig->fontFamily, charConfig->fontWeight,
+                [charToken](std::shared_ptr<const SkFont> font) { setFontAndGlyphId(*charToken); });
+        }
+    }
+
 
     Renderer& renderer = Renderer::getInstance();
     renderer.drawFn = [&renderer, visibleTokens](int err) {

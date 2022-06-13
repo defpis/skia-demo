@@ -41,6 +41,7 @@ class FontLoader : public Singleton<FontLoader> {
 public:
     std::unordered_map<std::string, FontInfo> fontMetaMap;
     std::unordered_map<std::string, std::shared_ptr<SkFont>> fontMap;
+    std::unordered_map<std::string, int> fontLoadingMap;
 
 public:
     FontLoader();

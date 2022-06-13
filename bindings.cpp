@@ -3,8 +3,9 @@
 
 void afterJSCallbackMounted() {
     FontLoader& fontLoader = FontLoader::getInstance();
-    fontLoader.loadFontMeta(
-        [&fontLoader](int err) { fontLoader.loadFont("PingFang SC", "Regular", [](int err) { layout(); }); });
+    fontLoader.loadFontMeta([&fontLoader](int err) {
+        fontLoader.loadFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT, [](int err) { layout(); });
+    });
 }
 
 int main() {

@@ -12,12 +12,6 @@
 
 void layout();
 
-enum class FallbackType {
-    NoNeedFallback,
-    NeedFallback,
-    AlreadyFallback,
-};
-
 enum class SizeModeType {
     AutoWidth,
     AutoHeight,
@@ -104,7 +98,6 @@ struct CharToken {
 
     std::shared_ptr<const SkFont> font = nullptr;
     SkGlyphID glyphId = 0;
-    FallbackType fallbackType = FallbackType::NoNeedFallback;
 };
 
 struct SegmentToken {
