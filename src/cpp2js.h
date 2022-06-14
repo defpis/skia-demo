@@ -8,6 +8,4 @@
 
 void runCPPCallback(int err, uintptr_t ptr, size_t size, int seq);
 
-int callJSFunc(const char* funcName, const char* strData, std::function<void(int, uintptr_t, size_t)> cb);
-
-void appendCallback(int seq, std::function<void(int, uintptr_t, size_t)> cb);
+void callJSFunc(const char* funcName, const char* strData, std::function<void(int, uintptr_t, size_t)> cb);

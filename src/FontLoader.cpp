@@ -62,33 +62,33 @@ void FontLoader::loadFont(const std::string& fontFamily, const std::string& font
         return cb(0);
     }
 
-    std::function<void(int, uintptr_t, size_t)> callback = [this, key, cb](int err, uintptr_t ptr, size_t size) {
-        if (err) {
-            std::cout << "loadFont error!" << std::endl;
-            return cb(err);
-        }
-
-        auto buffer = reinterpret_cast<uint8_t*>(ptr);
-        auto data = SkData::MakeFromMalloc(buffer, size);
-        auto typeFace = SkFontMgr::RefDefault()->makeFromData(data);
-        auto font = std::make_shared<SkFont>();
-        font->setTypeface(typeFace);
-        font->setSize(FONT_SIZE);
-        this->fontMap[key] = font;
-        std::cout << key << " loaded!" << std::endl;
-
-        cb(err);
-
-        this->fontLoadingMap.erase(key);
-    };
-
     auto it2 = fontLoadingMap.find(key);
     if (it2 != fontLoadingMap.end()) {
-        int seq = it2->second;
-        appendCallback(seq, callback);
+        it2->second.push_back(cb);
     } else {
-        int seq = callJSFunc("loadFont", data.dump().c_str(), callback);
-        fontLoadingMap[key] = seq;
+        fontLoadingMap[key] = {cb};
+        callJSFunc("loadFont", data.dump().c_str(), [this, key](int err, uintptr_t ptr, size_t size) {
+            if (err == 0) {
+                auto buffer = reinterpret_cast<uint8_t*>(ptr);
+                auto data = SkData::MakeFromMalloc(buffer, size);
+                auto typeFace = SkFontMgr::RefDefault()->makeFromData(data);
+                auto font = std::make_shared<SkFont>();
+                font->setTypeface(typeFace);
+                font->setSize(FONT_SIZE);
+                this->fontMap[key] = font;
+                std::cout << key << " loaded!" << std::endl;
+            } else {
+                std::cout << "loadFont error!" << std::endl;
+            }
+
+            auto it3 = this->fontLoadingMap.find(key);
+            if (it3 != fontLoadingMap.end()) {
+                for (auto& cb : it3->second) {
+                    cb(err);
+                }
+            }
+            this->fontLoadingMap.erase(key);
+        });
     }
 }
 
